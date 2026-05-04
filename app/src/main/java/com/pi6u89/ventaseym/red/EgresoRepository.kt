@@ -39,4 +39,25 @@ class EgresoRepository {
             }
         }
     }
+    /**
+     * Consulta los egresos totales entre dos fechas.
+     */
+    /**
+     * Consulta los egresos totales entre dos fechas.
+     */
+    suspend fun obtenerGastosPorRango(fechaInicio: String, fechaFin: String): Double {
+        return withContext(Dispatchers.IO) {
+            try {
+                val egresos = client.postgrest["egresos"].select {
+                    filter {
+                        gte("creado_en", fechaInicio)
+                        lte("creado_en", fechaFin)
+                    }
+                }.decodeList<Egreso>()
+                egresos.sumOf { it.monto }
+            } catch (e: Exception) {
+                0.0
+            }
+        }
+    }
 }

@@ -8,6 +8,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,7 +27,7 @@ import com.pi6u89.ventaseym.red.VentasRepository
 import kotlinx.coroutines.launch
 
 /**
- * Documentación: Pantalla principal que gestiona mesas, egresos y preparación de cierre.
+ * Pantalla principal que gestiona el estado de las mesas, gastos y preparación del cierre de caja.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,7 +35,10 @@ fun DashboardScreen(
     viewModel: VentasViewModel,
     alSeleccionarMesa: (Mesa) -> Unit,
     alSeleccionarParaLlevar: () -> Unit,
-    alIrACierre: (ventas: Double, egresos: Double) -> Unit // Nuevo callback para navegación
+    alIrACierre: (Double, Double) -> Unit, // Callback para navegar al cierre
+    alIrAFiados: () -> Unit,
+    alIrAHistorial: () -> Unit
+
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -42,35 +48,34 @@ fun DashboardScreen(
     val mesaRepo = remember { MesaRepository() }
     val ventasRepo = remember { VentasRepository() }
 
-    // Estados de la UI
+    // Estados de la pantalla
     var listaMesas by remember { mutableStateOf(listOf<Mesa>()) }
     var estaCargando by remember { mutableStateOf(true) }
     var mostrarDialogoEgreso by remember { mutableStateOf(false) }
 
-    // Carga inicial de datos
+    // Carga las mesas desde Supabase al iniciar[cite: 2]
     LaunchedEffect(Unit) {
         listaMesas = mesaRepo.obtenerMesas()
         estaCargando = false
     }
 
-    // Lógica de preparación de cierre (ahora dentro del scope correcto)
+    /**
+     * Calcula los totales antes de navegar al arqueo.[cite: 2]
+     */
     fun prepararCierre() {
         scope.launch {
             val idSesion = viewModel.sesionCajaActivaId
             if (idSesion == null) {
-                Toast.makeText(context, "No hay sesión activa", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "No hay una sesión de caja abierta", Toast.LENGTH_SHORT).show()
                 return@launch
             }
 
             try {
-                // Obtenemos los totales reales desde la base de datos
                 val totalVentas = ventasRepo.obtenerTotalVentasEfectivo(idSesion)
                 val totalGastos = egresoRepo.obtenerTotalEgresos(idSesion)
-
-                // Navegamos pasando la información calculada
-                alIrACierre(totalVentas, totalGastos)
+                alIrACierre(totalVentas, totalGastos) // Ejecuta la navegación[cite: 2]
             } catch (e: Exception) {
-                Toast.makeText(context, "Error al calcular totales", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Error al calcular el balance: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -80,11 +85,25 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text("Control de Mesas - E&M") },
                 actions = {
-                    // Botón para Registrar Gastos
-                    IconButton(onClick = { mostrarDialogoEgreso = true }) {
-                        Text("S/.", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                    IconButton(onClick = { alIrAHistorial() }) {
+                        Icon(
+                            imageVector = Icons.Default.History, // Asegúrate de importar Icons.Default.History
+                            contentDescription = "Historial"
+                        )
                     }
-                    // Botón para Iniciar Arqueo/Cierre
+                    // Botón para ver deudas (Fiados)
+                    IconButton(onClick = { alIrAFiados() }) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Fiados",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    // Botón para registrar egresos
+                    TextButton(onClick = { mostrarDialogoEgreso = true }) {
+                        Text("Egresos", color = MaterialTheme.colorScheme.error)
+                    }
+                    // Botón para iniciar el proceso de cierre
                     TextButton(onClick = { prepararCierre() }) {
                         Text("Cerrar Caja")
                     }
@@ -113,7 +132,8 @@ fun DashboardScreen(
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     items(listaMesas) { mesa ->
                         TarjetaMesa(
@@ -127,7 +147,6 @@ fun DashboardScreen(
         }
     }
 
-    // Diálogo de Egreso (Reutilizando tu lógica previa)
     if (mostrarDialogoEgreso) {
         DialogoEgreso(
             alCancelar = { mostrarDialogoEgreso = false },
@@ -140,11 +159,40 @@ fun DashboardScreen(
                 scope.launch {
                     val exito = egresoRepo.registrarEgreso(nuevoEgreso)
                     if (exito) {
-                        Toast.makeText(context, "Gasto guardado", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Egreso guardado con éxito", Toast.LENGTH_SHORT).show()
                         mostrarDialogoEgreso = false
                     }
                 }
             }
         )
+    }
+}
+
+/**
+ * Componente visual de una mesa individual.[cite: 2]
+ */
+@Composable
+fun TarjetaMesa(numeroMesa: Int, estaOcupada: Boolean, alHacerClic: () -> Unit) {
+    val colorFondo = if (estaOcupada) Color(0xFFE57373) else Color(0xFF81C784)
+    val textoEstado = if (estaOcupada) "Ocupada" else "Libre"
+
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .background(color = colorFondo, shape = RoundedCornerShape(16.dp))
+            .clickable { alHacerClic() }
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "Mesa $numeroMesa",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = textoEstado, style = MaterialTheme.typography.bodyLarge, color = Color.White)
+        }
     }
 }

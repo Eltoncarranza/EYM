@@ -1,5 +1,6 @@
 package com.pi6u89.ventaseym.modelos // Nota: Asegúrate de que este paquete coincida con el tuyo
 
+import kotlinx.serialization.Serializable
 import java.util.UUID
 
 // --- 1. ROLES Y USUARIOS ---
@@ -14,11 +15,12 @@ data class Usuario(
 )
 
 // --- 2. CONTROL DE CAJA ---
+@Serializable
 data class SesionCaja(
     val id: String = UUID.randomUUID().toString(),
     val idCajera: String,
     val montoInicialEfectivo: Double = 0.0,
-    var montoDeclaradoPorCajera: Double = 0.0, // Para el cierre ciego
+    var montoDeclaradoPorCajera: Double = 0.0,
     var montoTotalVentasEfectivo: Double = 0.0,
     var montoTotalEgresos: Double = 0.0,
     var diferencia: Double = 0.0,
@@ -47,11 +49,13 @@ data class Mesa(
     var estaOcupada: Boolean = false
 )
 
-// Representa un plato dentro del carrito antes de cobrar
+@Serializable// Representa un plato dentro del carrito antes de cobrar
 data class ItemPedido(
     val idUnicoItem: String = UUID.randomUUID().toString(),
+    val ventaId: String = "",
     val nombrePlato: String,
-    var precioIngresadoManualmente: Double
+    val precioIngresadoManualmente: Double,
+    var estado: String = "Pendiente"
 )
 
 // --- 4. VENTAS Y MODO OFFLINE ---
@@ -78,3 +82,6 @@ data class Venta(
     var estadoSincronizacion: EstadoSincronizacion = EstadoSincronizacion.PENDIENTE,
     val fechaHora: Long = System.currentTimeMillis()
 )
+
+// Actualiza esta parte en tu archivo de Modelos
+

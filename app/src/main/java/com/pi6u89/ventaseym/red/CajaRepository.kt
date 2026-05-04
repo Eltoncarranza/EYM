@@ -1,5 +1,7 @@
 package com.pi6u89.ventaseym.red
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import com.pi6u89.ventaseym.modelos.SesionCaja
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +27,7 @@ class CajaRepository {
     /**
      * Actualiza la sesión de caja con los montos finales y la marca como cerrada.
      */
+    @RequiresApi(Build.VERSION_CODES.O)
     suspend fun cerrarCaja(
         idSesion: String,
         montoFinalReal: Double,
