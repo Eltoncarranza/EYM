@@ -9,11 +9,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
 /**
- * Documentación: Interfaz para capturar el motivo y monto de una salida de dinero.
+ * Componente visual para registrar salidas de dinero de la caja.
+ * @param alConfirmar Acción que recibe la descripción y el monto del gasto.
+ * @param alCancelar Acción para cerrar el diálogo sin guardar.
  */
 @Composable
 fun DialogoEgreso(
-    alConfirmar: (descripcion: String, monto: Double) -> Unit,
+    alConfirmar: (String, Double) -> Unit,
     alCancelar: () -> Unit
 ) {
     var descripcion by remember { mutableStateOf("") }
@@ -21,34 +23,30 @@ fun DialogoEgreso(
 
     AlertDialog(
         onDismissRequest = alCancelar,
-        title = { Text("Registrar Egreso (Salida de Dinero)") },
+        title = { Text("Registrar Gasto") },
         text = {
             Column {
                 OutlinedTextField(
                     value = descripcion,
                     onValueChange = { descripcion = it },
-                    label = { Text("Descripción (ej. Compra de azúcar)") },
+                    label = { Text("Motivo") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = montoTexto,
                     onValueChange = { montoTexto = it },
-                    label = { Text("Monto (S/.)") },
+                    label = { Text("Monto S/.") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    val monto = montoTexto.toDoubleOrNull() ?: 0.0
-                    if (descripcion.isNotBlank() && monto > 0) {
-                        alConfirmar(descripcion, monto)
-                    }
-                }
-            ) { Text("Registrar Gasto") }
+            Button(onClick = {
+                val m = montoTexto.toDoubleOrNull() ?: 0.0
+                if (descripcion.isNotBlank() && m > 0) alConfirmar(descripcion, m)
+            }) { Text("Guardar") }
         },
         dismissButton = {
             TextButton(onClick = alCancelar) { Text("Cancelar") }

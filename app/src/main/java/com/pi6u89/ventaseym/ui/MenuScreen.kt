@@ -18,9 +18,13 @@ import com.pi6u89.ventaseym.modelos.Producto
 import com.pi6u89.ventaseym.modelos.ItemPedido
 import com.pi6u89.ventaseym.modelos.Venta
 import com.pi6u89.ventaseym.red.VentasRepository
+import com.pi6u89.ventaseym.red.ProductoRepository
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+/**
+ * Documentación: Pantalla de selección de pedidos con carga dinámica desde Supabase.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MenuScreen(
@@ -30,9 +34,17 @@ fun MenuScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val ventasRepository = remember { VentasRepository() }
 
-    // Estados de la pantalla
+    // Repositorios
+    val ventasRepository = remember { VentasRepository() }
+    val productoRepository = remember { ProductoRepository() }
+
+    // Estados de datos
+    var listaComidas by remember { mutableStateOf(listOf<Producto>()) }
+    var listaCafeteria by remember { mutableStateOf(listOf<Producto>()) }
+    var estaCargando by remember { mutableStateOf(true) }
+
+    // Estados de UI
     var pestanaSeleccionada by remember { mutableIntStateOf(0) }
     val carritoTemporal = remember { mutableStateListOf<ItemPedido>() }
 
@@ -42,15 +54,14 @@ fun MenuScreen(
     var productoSeleccionado by remember { mutableStateOf<Producto?>(null) }
     var precioIngresado by remember { mutableStateOf("") }
 
-    // Listas de productos (Ejemplo)
-    val listaComidas = listOf(
-        Producto("1", "Tallarín", "Comida"),
-        Producto("2", "Salchipollo", "Comida")
-    )
-    val listaCafeteria = listOf(
-        Producto("6", "Americano", "Cafetería"),
-        Producto("7", "Capuchino", "Cafetería")
-    )
+    // CARGA DINÁMICA: Se ejecuta al entrar a la pantalla
+    LaunchedEffect(Unit) {
+        val productosDesdeNube = productoRepository.obtenerProductos()
+        // Filtramos por las categorías definidas en tu base de datos
+        listaComidas = productosDesdeNube.filter { it.categoria == "Comida" }
+        listaCafeteria = productosDesdeNube.filter { it.categoria == "Cafeteria" }
+        estaCargando = false
+    }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text(if (numeroMesa != null) "Mesa $numeroMesa" else "Para Llevar") }) },
@@ -58,34 +69,49 @@ fun MenuScreen(
             Button(
                 onClick = { mostrarDialogoCobro = true },
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
-                enabled = carritoTemporal.isNotEmpty()
+                // Solo se activa si hay productos en el carrito y una sesión de caja abierta
+                enabled = carritoTemporal.isNotEmpty() && viewModel.sesionCajaActivaId != null
             ) {
                 Text("Cobrar (S/. ${carritoTemporal.sumOf { it.precioIngresadoManualmente }})")
             }
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding)) {
-            TabRow(selectedTabIndex = pestanaSeleccionada) {
-                Tab(selected = pestanaSeleccionada == 0, onClick = { pestanaSeleccionada = 0 }, text = { Text("Comida") })
-                Tab(selected = pestanaSeleccionada == 1, onClick = { pestanaSeleccionada = 1 }, text = { Text("Café") })
+        if (estaCargando) {
+            // Indicador visual mientras descargan los datos
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
             }
+        } else {
+            Column(modifier = Modifier.padding(padding)) {
+                TabRow(selectedTabIndex = pestanaSeleccionada) {
+                    Tab(selected = pestanaSeleccionada == 0, onClick = { pestanaSeleccionada = 0 }, text = { Text("Comida") })
+                    Tab(selected = pestanaSeleccionada == 1, onClick = { pestanaSeleccionada = 1 }, text = { Text("Café") })
+                }
 
-            val productos = if (pestanaSeleccionada == 0) listaComidas else listaCafeteria
+                val productosAMostrar = if (pestanaSeleccionada == 0) listaComidas else listaCafeteria
 
-            LazyColumn {
-                items(productos) { producto ->
-                    // Aquí se usa la función corregida
-                    TarjetaProducto(producto = producto) {
-                        productoSeleccionado = producto
-                        precioIngresado = ""
-                        mostrarDialogoPrecio = true
+                if (productosAMostrar.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("No hay productos en esta categoría")
+                    }
+                } else {
+                    LazyColumn {
+                        items(productosAMostrar) { producto ->
+                            TarjetaProducto(producto = producto) {
+                                productoSeleccionado = producto
+                                precioIngresado = ""
+                                mostrarDialogoPrecio = true
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    // Lógica de Diálogos
+    // --- Lógica de Diálogos ---
+
+    // 1. Diálogo para ingresar precio manual
     if (mostrarDialogoPrecio && productoSeleccionado != null) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoPrecio = false },
@@ -110,6 +136,7 @@ fun MenuScreen(
         )
     }
 
+    // 2. Diálogo final de cobro
     if (mostrarDialogoCobro) {
         DialogoCobro(
             esParaLlevar = numeroMesa == null,
@@ -138,6 +165,8 @@ fun MenuScreen(
                         carritoTemporal.clear()
                         mostrarDialogoCobro = false
                         alFinalizarVenta()
+                    } else {
+                        Toast.makeText(context, "Error al guardar venta", Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -146,7 +175,7 @@ fun MenuScreen(
 }
 
 /**
- * ESTA ES LA FUNCIÓN QUE FALTABA
+ * Componente visual para cada producto en la lista.
  */
 @Composable
 fun TarjetaProducto(producto: Producto, alHacerClic: () -> Unit) {

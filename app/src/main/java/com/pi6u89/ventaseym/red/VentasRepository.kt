@@ -27,4 +27,25 @@ class VentasRepository {
             }
         }
     }
+    /**
+     * Consulta Supabase para sumar todas las ventas en efectivo de la sesión actual.
+     */
+    suspend fun obtenerTotalVentasEfectivo(idSesion: String): Double {
+        return withContext(Dispatchers.IO) {
+            try {
+                val ventas = client.postgrest["ventas"].select {
+                    filter {
+                        eq("sesion_caja_id", idSesion)
+                        eq("metodo_pago", "Efectivo")
+                        eq("es_fiado", false) // No sumamos lo que no se pagó
+                    }
+                }.decodeList<Venta>()
+
+                ventas.sumOf { it.precioTotal }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                0.0
+            }
+        }
+    }
 }

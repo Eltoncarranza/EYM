@@ -22,4 +22,21 @@ class EgresoRepository {
             }
         }
     }
+    /**
+     * Consulta Supabase para sumar todos los egresos de la sesión actual.
+     */
+    suspend fun obtenerTotalEgresos(idSesion: String): Double {
+        return withContext(Dispatchers.IO) {
+            try {
+                val egresos = client.postgrest["egresos"].select {
+                    filter { eq("sesion_caja_id", idSesion) }
+                }.decodeList<Egreso>()
+
+                egresos.sumOf { it.monto }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                0.0
+            }
+        }
+    }
 }
